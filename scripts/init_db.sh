@@ -2,6 +2,16 @@
 set -x
 set -eo pipefail
 
+# Check if sqlx-cli is installed
+if ! [ -x "$(command -v sqlx)" ]; then
+    echo >&2 "Error: sqlx is not installed."
+    echo >&2 "Use:"
+    echo >&2 "    cargo install --version='~0.8' sqlx-cli \\"
+    echo >&2 "    --no-default-features --features rustls,postgres"
+    echo >&2 "to install it."
+    exit 1
+fi
+
 # Default values
 DB_PORT="${POSTGRES_PORT:=5433}"
 SUPERUSER="${SUPERUSER:=postgres}"
@@ -45,3 +55,13 @@ GRANT_QUERY="ALTER USER ${APP_USER} CREATEDB;"
 docker exec "${CONTAINER_NAME}" psql -U "${SUPERUSER}" -c "${GRANT_QUERY}"
 
 >&2 echo "User ${APP_USER} created and granted CREATEDB permissions."
+
+# 4. Create database using sqlx
+DATABASE_URL=postgres://${APP_USER}:${APP_USER_PWD}@localhost:${DB_PORT}/${APP_DB_NAME}
+export DATABASE_URL
+
+>&2 echo "Creating database ${APP_DB_NAME} using sqlx..."
+sqlx database create
+
+>&2 echo "Database setup complete!"
+>&2 echo "DATABASE_URL=${DATABASE_URL}"
