@@ -3,3 +3,7 @@
 .claude/agents
 
 /agent-creator
+.env
+
+/migrations
+configuration.yaml
