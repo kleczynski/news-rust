@@ -1,22 +1,39 @@
-.PHONY: help init-db check-db start-db stop-db clean-db build run test
+.PHONY: help init-db check-db start-db stop-db clean-db build run test install-sqlx db-url db-create migrate-add migrate-run migrate-revert
 
 # Default values
 DB_PORT ?= 5433
 CONTAINER_NAME ?= postgres
 SUPERUSER ?= postgres
 APP_USER ?= app
+APP_USER_PWD ?= secret
 APP_DB_NAME ?= newsletter
+
+# Database URL
+DATABASE_URL := postgres://$(APP_USER):$(APP_USER_PWD)@localhost:$(DB_PORT)/$(APP_DB_NAME)
+export DATABASE_URL
 
 help:
 	@echo "Available commands:"
-	@echo "  make init-db     - Initialize database (creates and starts container)"
-	@echo "  make check-db    - Check database status"
-	@echo "  make start-db    - Start existing database container"
-	@echo "  make stop-db     - Stop database container"
-	@echo "  make clean-db    - Remove database container and volume"
-	@echo "  make build       - Build the Rust project"
-	@echo "  make run         - Run the application"
-	@echo "  make test        - Run tests"
+	@echo ""
+	@echo "Database Management:"
+	@echo "  make init-db        - Initialize database (creates and starts container)"
+	@echo "  make check-db       - Check database status"
+	@echo "  make start-db       - Start existing database container"
+	@echo "  make stop-db        - Stop database container"
+	@echo "  make clean-db       - Remove database container and volume"
+	@echo "  make db-url         - Display DATABASE_URL"
+	@echo "  make db-create      - Create database using sqlx"
+	@echo ""
+	@echo "SQLx Commands:"
+	@echo "  make install-sqlx              - Install sqlx-cli"
+	@echo "  make migrate-add name=<NAME>   - Create a new migration"
+	@echo "  make migrate-run               - Run pending migrations"
+	@echo "  make migrate-revert            - Revert last migration"
+	@echo ""
+	@echo "Development:"
+	@echo "  make build          - Build the Rust project"
+	@echo "  make run            - Run the application"
+	@echo "  make test           - Run tests"
 
 # Check if database is initialized and running
 check-db:
@@ -100,3 +117,45 @@ run: init-db
 # Run tests (ensures database is running first)
 test: init-db
 	cargo test
+
+# Install sqlx-cli
+install-sqlx:
+	@if command -v sqlx > /dev/null 2>&1; then \
+		echo "sqlx-cli is already installed"; \
+		sqlx --version; \
+	else \
+		echo "Installing sqlx-cli..."; \
+		cargo install --version='~0.8' sqlx-cli \
+		--no-default-features --features rustls,postgres; \
+	fi
+
+# Display DATABASE_URL
+db-url:
+	@echo "DATABASE_URL=$(DATABASE_URL)"
+
+# Create database using sqlx
+db-create: start-db
+	@echo "Creating database $(APP_DB_NAME)..."
+	sqlx database create
+	@echo "✓ Database created successfully!"
+
+# Create a new migration
+migrate-add:
+	@if [ -z "$(name)" ]; then \
+		echo "Error: Migration name is required."; \
+		echo "Usage: make migrate-add name=<migration_name>"; \
+		echo "Example: make migrate-add name=create_subscriptions_table"; \
+		exit 1; \
+	fi
+	@echo "Creating migration: $(name)"
+	sqlx migrate add $(name)
+
+# Run pending migrations
+migrate-run: db-create
+	@echo "Running migrations..."
+	sqlx migrate run
+
+# Revert last migration
+migrate-revert: db-create
+	@echo "Reverting last migration..."
+	sqlx migrate revert
